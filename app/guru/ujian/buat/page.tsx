@@ -133,7 +133,11 @@ export default function BuatUjianPage() {
 
       toast.success('Ujian berhasil dibuat!')
       router.push(`/guru/ujian/${exam.id}`)
-    } catch { toast.error('Gagal membuat ujian') } finally { setSaving(false) }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : (typeof err === 'object' && err !== null && 'message' in err ? String((err as {message: unknown}).message) : 'Gagal membuat ujian')
+      toast.error(msg)
+      console.error('handleFinish error:', err)
+    } finally { setSaving(false) }
   }
 
   return (

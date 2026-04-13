@@ -22,17 +22,20 @@ export default function EditSoalPage() {
   const handleSubmit = async (data: SoalFormData) => {
     const supabase = createClient()
     const tags = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : []
-    const { error } = await supabase.from('question_bank').update({
-      mata_pelajaran: data.mata_pelajaran || null,
-      tipe: data.tipe,
-      teks_soal: data.teks_soal,
-      pilihan_a: data.pilihan_a || null,
-      pilihan_b: data.pilihan_b || null,
-      pilihan_c: data.pilihan_c || null,
-      pilihan_d: data.pilihan_d || null,
-      kunci_jawaban: data.kunci_jawaban || null,
-      tags: tags.length > 0 ? tags : null,
-    }).eq('id', id)
+    const { error } = await supabase
+      .from('question_bank')
+      .update({
+        mata_pelajaran: data.mata_pelajaran || null,
+        tipe: data.tipe,
+        teks_soal: data.teks_soal,
+        pilihan_a: data.pilihan_a || null,
+        pilihan_b: data.pilihan_b || null,
+        pilihan_c: data.pilihan_c || null,
+        pilihan_d: data.pilihan_d || null,
+        kunci_jawaban: data.kunci_jawaban || null,
+        tags: tags.length > 0 ? tags : null,
+      })
+      .eq('id', id)
     if (error) { toast.error('Gagal menyimpan perubahan'); return }
     toast.success('Soal berhasil diperbarui')
     router.push('/guru/bank-soal')
@@ -40,12 +43,25 @@ export default function EditSoalPage() {
 
   if (!question) return <div className="py-12 text-center text-gray-400">Memuat...</div>
 
+  // Convert null values to empty strings for the form
+  const initialData: Partial<SoalFormData> = {
+    mata_pelajaran: question.mata_pelajaran ?? '',
+    tipe: question.tipe,
+    teks_soal: question.teks_soal,
+    pilihan_a: question.pilihan_a ?? '',
+    pilihan_b: question.pilihan_b ?? '',
+    pilihan_c: question.pilihan_c ?? '',
+    pilihan_d: question.pilihan_d ?? '',
+    kunci_jawaban: question.kunci_jawaban ?? '',
+    tags: question.tags?.join(', ') ?? '',
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-xl font-bold text-gray-900">Edit Soal</h1>
       <Card>
         <SoalForm
-          initialData={{ ...question, tags: question.tags?.join(', ') || '' }}
+          initialData={initialData}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}
           submitLabel="Simpan Perubahan"

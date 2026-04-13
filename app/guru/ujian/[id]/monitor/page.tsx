@@ -3,9 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { StudentSession, Violation, Exam, Class } from '@/types'
+import { StudentSession, Violation, Exam } from '@/types'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import SiswaMonitorCard from '@/components/guru/SiswaMonitorCard'
 import { toast } from '@/components/ui/Toast'
@@ -25,11 +24,11 @@ export default function MonitorPage() {
     const { data: classes } = await supabase.from('classes').select('id').eq('exam_id', id)
     if (!classes?.length) { setLoading(false); return }
 
-    const classIds = classes.map(c => c.id)
+    const classIds = classes.map((c: { id: string }) => c.id)
     const { data: sess } = await supabase
       .from('student_sessions').select('*').in('class_id', classIds)
 
-    const sessWithViolations = await Promise.all((sess || []).map(async (s) => {
+    const sessWithViolations = await Promise.all((sess || []).map(async (s: StudentSession) => {
       const { data: v } = await supabase.from('violations').select('*').eq('session_id', s.id)
       return { ...s, violations: v || [] }
     }))
@@ -40,7 +39,6 @@ export default function MonitorPage() {
   useEffect(() => {
     load()
     const supabase = createClient()
-
     const sub = supabase.channel('monitor')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'student_sessions' }, () => load())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'violations' }, (payload) => {
@@ -54,14 +52,16 @@ export default function MonitorPage() {
         }))
       })
       .subscribe()
-
     return () => { supabase.removeChannel(sub) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   const handleReset = async (sessionId: string) => {
     if (!confirm('Reset sesi siswa ini? Siswa dapat masuk kembali.')) return
     const supabase = createClient()
-    await supabase.from('student_sessions').update({ status: 'mengerjakan', selesai_at: null }).eq('id', sessionId)
+    await supabase.from('student_sessions')
+      .update({ status: 'mengerjakan', selesai_at: null })
+      .eq('id', sessionId)
     toast.success('Sesi direset')
     load()
   }
@@ -72,7 +72,7 @@ export default function MonitorPage() {
 
   return (
     <div className="space-y-6">
-      <audio ref={alertRef} src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAA" />
+      <audio ref={alertRef} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Live Monitor</h1>

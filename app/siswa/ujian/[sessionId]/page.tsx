@@ -116,6 +116,57 @@ export default function UjianPage() {
     )
   }
 
+  // === MODE GOOGLE FORM ===
+  if (exam?.sumber === 'google_form' && exam.form_url) {
+    const embedUrl = toGoogleFormEmbedUrl(exam.form_url)
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+          <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{exam.judul}</p>
+              <p className="text-xs text-gray-400">{sessionData?.nama_siswa}</p>
+            </div>
+            {sessionData?.mulai_at && (
+              <TimerCountdown
+                durasiMenit={exam.durasi_menit}
+                mulaiAt={sessionData.mulai_at}
+                onTimeout={handleTimeout}
+              />
+            )}
+            <Button size="sm" onClick={() => {
+              if (confirm('Pastikan kamu sudah submit di Google Form. Selesaikan ujian?')) {
+                handleSubmit()
+              }
+            }} loading={submitting}>
+              Selesai
+            </Button>
+          </div>
+        </header>
+
+        {/* Google Form iframe */}
+        <main className="flex-1 w-full">
+          <iframe
+            src={embedUrl}
+            className="w-full h-full border-0"
+            style={{ minHeight: 'calc(100vh - 56px)' }}
+            title={exam.judul}
+            allow="camera; microphone"
+          />
+        </main>
+
+        <ViolationWarning
+          open={violationWarning.open}
+          jenis={violationWarning.jenis}
+          count={violationWarning.count}
+          onClose={() => setViolationWarning(prev => ({ ...prev, open: false }))}
+        />
+      </div>
+    )
+  }
+
+  // === MODE MANUAL ===
   const currentQuestion = questions[currentIndex]
   const answered = Object.keys(answers).length
 
@@ -177,7 +228,6 @@ export default function UjianPage() {
 
       {/* Navigation */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200">
-        {/* Question navigator */}
         <div className="max-w-2xl mx-auto px-4 py-2 flex gap-1.5 overflow-x-auto">
           {questions.map((q, i) => (
             <button
@@ -226,4 +276,18 @@ export default function UjianPage() {
       />
     </div>
   )
+}
+
+// Konversi berbagai format URL Google Form ke embed URL
+function toGoogleFormEmbedUrl(url: string): string {
+  // Expand forms.gle short link → tidak bisa di client, simpan full URL saat guru input
+  // Tangani format: https://docs.google.com/forms/d/{id}/viewform
+  //                 https://docs.google.com/forms/d/{id}/edit
+  //                 https://forms.gle/{code}
+  const match = url.match(/\/forms\/d\/([^/?\s]+)/)
+  if (match) {
+    return `https://docs.google.com/forms/d/${match[1]}/viewform?embedded=true`
+  }
+  // Jika sudah embed URL atau format lain, kembalikan apa adanya
+  return url.includes('embedded=true') ? url : `${url}${url.includes('?') ? '&' : '?'}embedded=true`
 }

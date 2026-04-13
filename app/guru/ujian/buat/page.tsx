@@ -172,7 +172,7 @@ export default function BuatUjianPage() {
             {[
               { key: 'manual', icon: '✏️', label: 'Input Manual', desc: 'Buat soal satu per satu langsung' },
               { key: 'bank_soal', icon: '📚', label: 'Dari Bank Soal', desc: 'Pilih soal yang sudah tersimpan' },
-              { key: 'google_form', icon: '📝', label: 'Import Google Form', desc: 'Import soal dari Google Form via Apps Script' },
+              { key: 'google_form', icon: '📝', label: 'Google Form', desc: 'Pakai Google Form kamu — ProctorEdu jadi pengawasnya' },
             ].map(opt => (
               <button key={opt.key} onClick={() => handleStep2(opt.key as Sumber)}
                 className="w-full flex items-start gap-4 rounded-xl border-2 border-gray-200 p-4 text-left hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
@@ -248,22 +248,58 @@ export default function BuatUjianPage() {
       {/* Step 3: Google Form */}
       {step === 3 && sumber === 'google_form' && (
         <Card>
-          <h2 className="font-semibold text-gray-900 mb-4">Import dari Google Form</h2>
+          <h2 className="font-semibold text-gray-900 mb-1">Google Form sebagai Soal Ujian</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Siswa mengerjakan Google Form kamu di dalam ProctorEdu — fullscreen &amp; anti-contek aktif otomatis.
+            Penilaian tetap dilihat di Google Form Responses.
+          </p>
           <div className="space-y-4">
-            <Input label="URL Apps Script" value={formUrl} onChange={e => setFormUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" />
-            <Button onClick={handleImportForm} loading={importing}>Import Soal</Button>
-            {questions.length > 0 && (
-              <div>
-                <p className="text-sm font-medium text-green-700 mb-2">{questions.length} soal berhasil diimport</p>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {questions.map((q, i) => <p key={i} className="text-xs text-gray-600 line-clamp-1">{i + 1}. {q.teks_soal}</p>)}
-                </div>
+            <Input
+              label="Link Google Form"
+              value={formUrl}
+              onChange={e => setFormUrl(e.target.value)}
+              placeholder="https://docs.google.com/forms/d/... atau https://forms.gle/..."
+            />
+            {formUrl.trim() && (
+              <div className="rounded-lg bg-indigo-50 border border-indigo-100 p-3 text-xs text-indigo-700 space-y-1">
+                <p className="font-medium">Pastikan Google Form kamu:</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Bisa diakses siapa saja (tidak memerlukan login Google)</li>
+                  <li>Pengiriman dibatasi 1 respons per orang (opsional)</li>
+                </ul>
               </div>
             )}
           </div>
           <div className="flex justify-between mt-4">
             <Button variant="ghost" onClick={() => setStep(2)}>&larr; Kembali</Button>
-            <Button onClick={() => setStep(4)} disabled={questions.length === 0}>Lanjut &rarr;</Button>
+            <Button
+              onClick={async () => {
+                if (!formUrl.trim()) return
+                setImporting(true)
+                try {
+                  // Resolve forms.gle → full URL
+                  if (formUrl.includes('forms.gle')) {
+                    const res = await fetch('/api/import-form', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url: formUrl }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data.error)
+                    setFormUrl(data.url)
+                  }
+                  setStep(4)
+                } catch {
+                  toast.error('URL tidak valid. Pastikan link Google Form benar.')
+                } finally {
+                  setImporting(false)
+                }
+              }}
+              loading={importing}
+              disabled={!formUrl.trim()}
+            >
+              Lanjut &rarr;
+            </Button>
           </div>
         </Card>
       )}

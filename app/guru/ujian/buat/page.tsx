@@ -285,17 +285,15 @@ export default function BuatUjianPage() {
                 if (!formUrl.trim()) return
                 setImporting(true)
                 try {
-                  // Resolve forms.gle → full URL
-                  if (formUrl.includes('forms.gle')) {
-                    const res = await fetch('/api/import-form', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ url: formUrl }),
-                    })
-                    const data = await res.json()
-                    if (!res.ok) throw new Error(data.error)
-                    setFormUrl(data.url)
-                  }
+                  // Selalu resolve lewat API: handles forms.gle redirect + normalisasi URL
+                  const res = await fetch('/api/import-form', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: formUrl }),
+                  })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data.error)
+                  setFormUrl(data.url)
                   setStep(4)
                 } catch {
                   toast.error('URL tidak valid. Pastikan link Google Form benar.')

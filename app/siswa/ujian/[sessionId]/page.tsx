@@ -280,10 +280,12 @@ export default function UjianPage() {
 
 // Konversi berbagai format URL Google Form ke embed URL
 function toGoogleFormEmbedUrl(url: string): string {
-  // Expand forms.gle short link → tidak bisa di client, simpan full URL saat guru input
-  // Tangani format: https://docs.google.com/forms/d/{id}/viewform
-  //                 https://docs.google.com/forms/d/{id}/edit
-  //                 https://forms.gle/{code}
+  // Tangani format /d/e/{responseId}/viewform (format paling umum dari tombol Kirim)
+  const matchE = url.match(/\/forms\/d\/e\/([^/?\s]+)/)
+  if (matchE) {
+    return `https://docs.google.com/forms/d/e/${matchE[1]}/viewform?embedded=true`
+  }
+  // Tangani format /d/{formId}/... (format edit/draft)
   const match = url.match(/\/forms\/d\/([^/?\s]+)/)
   if (match) {
     return `https://docs.google.com/forms/d/${match[1]}/viewform?embedded=true`

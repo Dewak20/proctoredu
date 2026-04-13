@@ -16,20 +16,27 @@ export async function POST(request: NextRequest) {
 }
 
 async function resolveFormUrl(url: string): Promise<string> {
-  // Sudah full URL Google Forms
-  if (url.includes('docs.google.com/forms')) {
-    return url.split('?')[0] // Buang query params lama
-  }
-
   // forms.gle short link — perlu di-resolve lewat redirect
   if (url.includes('forms.gle')) {
     const res = await fetch(url, { redirect: 'follow' })
     const finalUrl = res.url
     if (finalUrl.includes('docs.google.com/forms')) {
-      return finalUrl.split('?')[0]
+      return normalizeFormUrl(finalUrl)
     }
     throw new Error('Redirect tidak mengarah ke Google Forms')
   }
 
+  // Sudah full URL Google Forms
+  if (url.includes('docs.google.com/forms')) {
+    return normalizeFormUrl(url)
+  }
+
   throw new Error('Bukan URL Google Form yang dikenali')
+}
+
+// Normalisasi ke format viewform tanpa query params
+function normalizeFormUrl(url: string): string {
+  const clean = url.split('?')[0]
+  // Ubah /edit, /closedform, dll → /viewform
+  return clean.replace(/\/(edit|closedform|preview|formResponse)$/, '/viewform')
 }

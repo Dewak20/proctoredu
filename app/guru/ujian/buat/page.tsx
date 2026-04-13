@@ -99,7 +99,11 @@ export default function BuatUjianPage() {
     if (sumber === 'bank_soal') {
       const selected = bankSoal.filter(q => selectedIds.has(q.id))
       if (selected.length === 0) { toast.error('Pilih minimal 1 soal'); return }
-    } else if (questions.length === 0) { toast.error('Tambah minimal 1 soal'); return }
+    } else if (sumber === 'manual' && questions.length === 0) {
+      toast.error('Tambah minimal 1 soal'); return
+    } else if (sumber === 'google_form' && !formUrl.trim()) {
+      toast.error('Link Google Form wajib diisi'); return
+    }
     setSaving(true)
     try {
       const supabase = createClient()

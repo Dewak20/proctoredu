@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { Question, StudentSession, Exam, ViolationType } from '@/types'
 import { useUjianStore } from '@/store/ujianStore'
 import { useProctor } from '@/lib/proctor/hooks'
@@ -20,23 +19,27 @@ export default function UjianPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const router = useRouter()
 
-  const [session, setSession] = useState<StudentSession | null>(null)
+  const [sessionData, setSessionData] = useState<StudentSession | null>(null)
   const [exam, setExam] = useState<Exam | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
-  const [violationWarning, setViolationWarning] = useState<{ open: boolean; jenis: ViolationType | null; count: number }>({
-    open: false, jenis: null, count: 0
-  })
+  const [violationWarning, setViolationWarning] = useState<{
+    open: boolean; jenis: ViolationType | null; count: number
+  }>({ open: false, jenis: null, count: 0 })
 
-  const { answers, currentIndex, setAnswer, setCurrentIndex, setSession, setQuestions: storeSetQuestions } = useUjianStore()
+  const {
+    answers,
+    currentIndex,
+    setAnswer,
+    setCurrentIndex,
+    setSession: storeSetSession,
+    setQuestions: storeSetQuestions,
+  } = useUjianStore()
 
   const handleViolation = useCallback((jenis: ViolationType) => {
-    setViolationWarning(prev => {
-      const count = prev.count + 1
-      return { open: true, jenis, count }
-    })
+    setViolationWarning(prev => ({ open: true, jenis, count: prev.count + 1 }))
   }, [])
 
   useProctor({ sessionId, onViolation: handleViolation, enabled: !loading })
@@ -47,17 +50,14 @@ export default function UjianPage() {
     const onOffline = () => setIsOnline(false)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
-    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) }
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
   }, [])
 
   useEffect(() => {
     const load = async () => {
-      // First check store for cached session
-      const stored = useUjianStore.getState()
-      if (stored.sessionId === sessionId && stored.questions.length > 0) {
-        setQuestions(stored.questions)
-      }
-
       const res = await fetch(`/api/siswa/session/${sessionId}`)
       if (!res.ok) { router.push('/siswa'); return }
       const data = await res.json()
@@ -67,15 +67,23 @@ export default function UjianPage() {
         return
       }
 
-      setSession(data.session)
+      setSessionData(data.session)
       setExam(data.exam)
       setQuestions(data.questions)
       storeSetQuestions(data.questions)
-      setSession(sessionId)
+      storeSetSession(sessionId)
+
+      // Restore drafts from server
+      if (data.drafts?.length) {
+        data.drafts.forEach((d: { question_id: string; jawaban_draft: string | null }) => {
+          if (d.jawaban_draft) setAnswer(d.question_id, d.jawaban_draft)
+        })
+      }
+
       setLoading(false)
     }
     load()
-  }, [sessionId])
+  }, [sessionId, router, storeSetQuestions, storeSetSession, setAnswer])
 
   const handleSubmit = useCallback(async (isTimeout = false) => {
     if (submitting) return
@@ -89,7 +97,10 @@ export default function UjianPage() {
       if (!res.ok) throw new Error()
       useUjianStore.getState().reset()
       router.push('/siswa/selesai')
-    } catch { toast.error('Gagal submit, coba lagi'); setSubmitting(false) }
+    } catch {
+      toast.error('Gagal submit, coba lagi')
+      setSubmitting(false)
+    }
   }, [sessionId, answers, submitting, router])
 
   const handleTimeout = useCallback(() => handleSubmit(true), [handleSubmit])
@@ -117,8 +128,12 @@ export default function UjianPage() {
             <p className="text-sm font-medium text-gray-900 truncate">{exam?.judul}</p>
             <p className="text-xs text-gray-400">{answered}/{questions.length} dijawab</p>
           </div>
-          {session?.mulai_at && exam && (
-            <TimerCountdown durasiMenit={exam.durasi_menit} mulaiAt={session.mulai_at} onTimeout={handleTimeout} />
+          {sessionData?.mulai_at && exam && (
+            <TimerCountdown
+              durasiMenit={exam.durasi_menit}
+              mulaiAt={sessionData.mulai_at}
+              onTimeout={handleTimeout}
+            />
           )}
         </div>
         {!isOnline && (
@@ -133,13 +148,28 @@ export default function UjianPage() {
         {currentQuestion && (
           <div className="space-y-6">
             {currentQuestion.tipe === 'pilgan' && (
-              <SoalPilgan soal={currentQuestion} jawaban={answers[currentQuestion.id] || null} onJawab={j => setAnswer(currentQuestion.id, j)} nomor={currentIndex + 1} />
+              <SoalPilgan
+                soal={currentQuestion}
+                jawaban={answers[currentQuestion.id] || null}
+                onJawab={j => setAnswer(currentQuestion.id, j)}
+                nomor={currentIndex + 1}
+              />
             )}
             {currentQuestion.tipe === 'essay' && (
-              <SoalEssay soal={currentQuestion} jawaban={answers[currentQuestion.id] || ''} onJawab={j => setAnswer(currentQuestion.id, j)} nomor={currentIndex + 1} />
+              <SoalEssay
+                soal={currentQuestion}
+                jawaban={answers[currentQuestion.id] || ''}
+                onJawab={j => setAnswer(currentQuestion.id, j)}
+                nomor={currentIndex + 1}
+              />
             )}
             {currentQuestion.tipe === 'isian' && (
-              <SoalIsian soal={currentQuestion} jawaban={answers[currentQuestion.id] || ''} onJawab={j => setAnswer(currentQuestion.id, j)} nomor={currentIndex + 1} />
+              <SoalIsian
+                soal={currentQuestion}
+                jawaban={answers[currentQuestion.id] || ''}
+                onJawab={j => setAnswer(currentQuestion.id, j)}
+                nomor={currentIndex + 1}
+              />
             )}
           </div>
         )}
@@ -150,26 +180,37 @@ export default function UjianPage() {
         {/* Question navigator */}
         <div className="max-w-2xl mx-auto px-4 py-2 flex gap-1.5 overflow-x-auto">
           {questions.map((q, i) => (
-            <button key={q.id} onClick={() => setCurrentIndex(i)}
+            <button
+              key={q.id}
+              onClick={() => setCurrentIndex(i)}
               className={clsx(
                 'flex-shrink-0 h-7 w-7 rounded text-xs font-medium transition-colors',
                 i === currentIndex ? 'bg-indigo-600 text-white' :
                 answers[q.id] ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
               )}
-            >{i + 1}</button>
+            >
+              {i + 1}
+            </button>
           ))}
         </div>
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Button variant="secondary" onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))} disabled={currentIndex === 0}>
+          <Button
+            variant="secondary"
+            onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+            disabled={currentIndex === 0}
+          >
             &larr; Prev
           </Button>
           {currentIndex < questions.length - 1 ? (
             <Button onClick={() => setCurrentIndex(currentIndex + 1)}>Next &rarr;</Button>
           ) : (
             <Button
-              onClick={() => { if (confirm(`Kamu baru menjawab ${answered} dari ${questions.length} soal. Submit?`)) handleSubmit() }}
+              onClick={() => {
+                if (confirm(`Kamu baru menjawab ${answered} dari ${questions.length} soal. Submit?`)) {
+                  handleSubmit()
+                }
+              }}
               loading={submitting}
-              variant="primary"
             >
               Submit Ujian
             </Button>

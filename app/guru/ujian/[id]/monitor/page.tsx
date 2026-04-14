@@ -1,67 +1,75 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { StudentSession, Violation, Exam } from '@/types'
+import { StudentSession, Violation } from '@/types'
 import { Card } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import SiswaMonitorCard from '@/components/guru/SiswaMonitorCard'
 import { toast } from '@/components/ui/Toast'
 
+type SessionWithViolations = StudentSession & { violations: Violation[] }
+
 export default function MonitorPage() {
   const { id } = useParams<{ id: string }>()
-  const [exam, setExam] = useState<Exam | null>(null)
-  const [sessions, setSessions] = useState<(StudentSession & { violations: Violation[] })[]>([])
+  const [examJudul, setExamJudul] = useState('')
+  const [sessions, setSessions] = useState<SessionWithViolations[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const alertRef = useRef<HTMLAudioElement | null>(null)
+  const prevViolationCount = useRef<Record<string, number>>({})
 
-  const load = async () => {
-    const supabase = createClient()
-    const { data: e } = await supabase.from('exams').select('*').eq('id', id).single()
-    setExam(e)
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/guru/ujian/${id}/monitor`)
+    if (!res.ok) return
+    const data = await res.json()
+    if (data.exam?.judul) setExamJudul(data.exam.judul)
 
-    const { data: classes } = await supabase.from('classes').select('id').eq('exam_id', id)
-    if (!classes?.length) { setLoading(false); return }
+    // Cek pelanggaran baru → bunyikan alert
+    const newSessions: SessionWithViolations[] = data.sessions || []
+    newSessions.forEach((s: SessionWithViolations) => {
+      const prev = prevViolationCount.current[s.id] ?? 0
+      const curr = s.violations.length
+      if (curr > prev && alertRef.current) {
+        const tabSwitches = s.violations.filter(v => v.jenis === 'tab_switch').length
+        if (tabSwitches >= 5) alertRef.current.play().catch(() => {})
+      }
+      prevViolationCount.current[s.id] = curr
+    })
 
-    const classIds = classes.map((c: { id: string }) => c.id)
-    const { data: sess } = await supabase
-      .from('student_sessions').select('*').in('class_id', classIds)
-
-    const sessWithViolations = await Promise.all((sess || []).map(async (s: StudentSession) => {
-      const { data: v } = await supabase.from('violations').select('*').eq('session_id', s.id)
-      return { ...s, violations: v || [] }
-    }))
-    setSessions(sessWithViolations)
+    setSessions(newSessions)
+    setLastUpdated(new Date())
     setLoading(false)
-  }
+  }, [id])
 
   useEffect(() => {
     load()
+
+    // Auto-refresh setiap 8 detik sebagai fallback
+    const interval = setInterval(load, 8000)
+
+    // Realtime sebagai trigger tambahan
     const supabase = createClient()
-    const sub = supabase.channel('monitor')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_sessions' }, () => load())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'violations' }, (payload) => {
-        const v = payload.new as Violation
-        setSessions(prev => prev.map(s => {
-          if (s.id !== v.session_id) return s
-          const newViolations = [...s.violations, v]
-          const tabSwitches = newViolations.filter(x => x.jenis === 'tab_switch').length
-          if (tabSwitches >= 5 && alertRef.current) alertRef.current.play().catch(() => {})
-          return { ...s, violations: newViolations }
-        }))
-      })
+    const sub = supabase.channel(`monitor-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_sessions' }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'violations' }, load)
       .subscribe()
-    return () => { supabase.removeChannel(sub) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(sub)
+    }
+  }, [id, load])
 
   const handleReset = async (sessionId: string) => {
     if (!confirm('Reset sesi siswa ini? Siswa dapat masuk kembali.')) return
-    const supabase = createClient()
-    await supabase.from('student_sessions')
-      .update({ status: 'mengerjakan', selesai_at: null })
-      .eq('id', sessionId)
+    const res = await fetch(`/api/guru/ujian/${id}/monitor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    })
+    if (!res.ok) { toast.error('Gagal reset sesi'); return }
     toast.success('Sesi direset')
     load()
   }
@@ -73,10 +81,13 @@ export default function MonitorPage() {
   return (
     <div className="space-y-6">
       <audio ref={alertRef} />
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Live Monitor</h1>
-          <p className="text-sm text-gray-500">{exam?.judul}</p>
+          <p className="text-sm text-gray-500">{examJudul}</p>
+          {lastUpdated && (
+            <p className="text-xs text-gray-400">Update: {lastUpdated.toLocaleTimeString('id-ID')}</p>
+          )}
         </div>
         <Button variant="secondary" size="sm" onClick={load}>Refresh</Button>
       </div>
@@ -101,6 +112,7 @@ export default function MonitorPage() {
       ) : sessions.length === 0 ? (
         <Card className="text-center py-12">
           <p className="text-gray-400">Belum ada siswa yang masuk ujian</p>
+          <p className="text-xs text-gray-400 mt-1">Halaman ini auto-refresh setiap 8 detik</p>
         </Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

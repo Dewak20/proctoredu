@@ -123,10 +123,10 @@ export default function UjianPage() {
       <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-          <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <div className="w-full px-3 h-12 flex items-center justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{exam.judul}</p>
-              <p className="text-xs text-gray-400">{sessionData?.nama_siswa}</p>
+              <p className="text-sm font-medium text-gray-900 truncate leading-tight">{exam.judul}</p>
+              <p className="text-xs text-gray-400 truncate">{sessionData?.nama_siswa}</p>
             </div>
             {sessionData?.mulai_at && (
               <TimerCountdown
@@ -150,7 +150,7 @@ export default function UjianPage() {
           <iframe
             src={embedUrl}
             className="w-full h-full border-0"
-            style={{ minHeight: 'calc(100vh - 56px)' }}
+            style={{ minHeight: 'calc(100dvh - 48px)' }}
             title={exam.judul}
             allow="camera; microphone"
           />
@@ -174,9 +174,9 @@ export default function UjianPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+        <div className="w-full px-3 h-12 flex items-center justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{exam?.judul}</p>
+            <p className="text-sm font-medium text-gray-900 truncate leading-tight">{exam?.judul}</p>
             <p className="text-xs text-gray-400">{answered}/{questions.length} dijawab</p>
           </div>
           {sessionData?.mulai_at && exam && (
@@ -188,16 +188,16 @@ export default function UjianPage() {
           )}
         </div>
         {!isOnline && (
-          <div className="bg-yellow-50 border-t border-yellow-200 px-4 py-1.5 text-xs text-yellow-700 text-center">
-            Offline — jawaban tersimpan lokal, akan sync otomatis saat online
+          <div className="bg-yellow-50 border-t border-yellow-200 px-3 py-1 text-xs text-yellow-700 text-center">
+            Offline — jawaban tersimpan lokal
           </div>
         )}
       </header>
 
       {/* Soal */}
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 w-full max-w-2xl mx-auto px-3 py-4">
         {currentQuestion && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {currentQuestion.tipe === 'pilgan' && (
               <SoalPilgan
                 soal={currentQuestion}
@@ -227,14 +227,15 @@ export default function UjianPage() {
       </main>
 
       {/* Navigation */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-200">
-        <div className="max-w-2xl mx-auto px-4 py-2 flex gap-1.5 overflow-x-auto">
+      <div className="sticky bottom-0 bg-white border-t border-gray-200 safe-area-bottom">
+        {/* Nomor soal */}
+        <div className="px-3 pt-2 pb-1 flex gap-1.5 overflow-x-auto">
           {questions.map((q, i) => (
             <button
               key={q.id}
               onClick={() => setCurrentIndex(i)}
               className={clsx(
-                'flex-shrink-0 h-7 w-7 rounded text-xs font-medium transition-colors',
+                'flex-shrink-0 h-9 w-9 rounded-lg text-sm font-medium transition-colors',
                 i === currentIndex ? 'bg-indigo-600 text-white' :
                 answers[q.id] ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
               )}
@@ -243,24 +244,29 @@ export default function UjianPage() {
             </button>
           ))}
         </div>
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+        {/* Prev / Next */}
+        <div className="px-3 py-2 grid grid-cols-2 gap-2">
           <Button
             variant="secondary"
             onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
             disabled={currentIndex === 0}
+            className="w-full"
           >
-            &larr; Prev
+            &larr; Sebelumnya
           </Button>
           {currentIndex < questions.length - 1 ? (
-            <Button onClick={() => setCurrentIndex(currentIndex + 1)}>Next &rarr;</Button>
+            <Button onClick={() => setCurrentIndex(currentIndex + 1)} className="w-full">
+              Berikutnya &rarr;
+            </Button>
           ) : (
             <Button
               onClick={() => {
-                if (confirm(`Kamu baru menjawab ${answered} dari ${questions.length} soal. Submit?`)) {
+                if (confirm(`Kamu baru menjawab ${answered} dari ${questions.length} soal. Submit ujian?`)) {
                   handleSubmit()
                 }
               }}
               loading={submitting}
+              className="w-full"
             >
               Submit Ujian
             </Button>

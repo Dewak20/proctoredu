@@ -32,13 +32,13 @@ export default function TimerCountdown({ durasiMenit, mulaiAt, onTimeout }: Time
 
   return (
     <div className={clsx(
-      'flex flex-col items-center justify-center rounded-xl px-5 py-3',
+      'flex items-center gap-1.5 rounded-lg px-3 py-1.5',
       isRed ? 'bg-red-100 border-2 border-red-400 animate-pulse' :
       isOrange ? 'bg-orange-100 border border-orange-300' :
       isYellow ? 'bg-yellow-100 border border-yellow-300' : 'bg-white border border-gray-200'
     )}>
-      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Sisa Waktu</span>
-      <span className={clsx('font-mono text-2xl font-bold', isRed ? 'text-red-600' : isOrange ? 'text-orange-600' : isYellow ? 'text-yellow-700' : 'text-gray-900')}>
+      <span className={clsx('text-xs text-gray-400 hidden sm:inline')}>Sisa</span>
+      <span className={clsx('font-mono text-base font-bold tabular-nums', isRed ? 'text-red-600' : isOrange ? 'text-orange-600' : isYellow ? 'text-yellow-700' : 'text-gray-900')}>
         {label}
       </span>
     </div>

@@ -8,8 +8,7 @@ import { Card } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import SoalForm, { SoalFormData } from '@/components/guru/SoalForm'
-import KelasManager from '@/components/guru/KelasManager'
-import { Question, Class } from '@/types'
+import { Question } from '@/types'
 import { generateToken } from '@/lib/token'
 
 type Step = 1 | 2 | 3 | 4
@@ -23,7 +22,7 @@ interface ExamInfo {
   bobot_essay: number
 }
 
-const STEP_LABELS = ['Info Ujian', 'Sumber Soal', 'Tambah Soal', 'Kelas & Token']
+const STEP_LABELS = ['Info Ujian', 'Sumber Soal', 'Tambah Soal', 'Token']
 
 export default function BuatUjianPage() {
   const router = useRouter()
@@ -35,8 +34,8 @@ export default function BuatUjianPage() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [bankSoal, setBankSoal] = useState<Question[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [classes, setClasses] = useState<Omit<Class, 'id' | 'exam_id' | 'created_at'>[]>([])
   const [formUrl, setFormUrl] = useState('')
+  const [token, setToken] = useState(() => generateToken())
   const [importing, setImporting] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -77,28 +76,9 @@ export default function BuatUjianPage() {
     toast.success('Soal ditambahkan')
   }
 
-  const handleImportForm = async () => {
-    if (!formUrl.trim()) { toast.error('URL wajib diisi'); return }
-    setImporting(true)
-    try {
-      const res = await fetch('/api/import-form', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: formUrl }),
-      })
-      if (!res.ok) throw new Error()
-      const { questions: imported } = await res.json()
-      setQuestions(imported)
-      toast.success(`${imported.length} soal berhasil diimport`)
-    } catch {
-      toast.error('Gagal mengimport dari Google Form')
-    } finally { setImporting(false) }
-  }
-
   const handleFinish = async () => {
     if (sumber === 'bank_soal') {
-      const selected = bankSoal.filter(q => selectedIds.has(q.id))
-      if (selected.length === 0) { toast.error('Pilih minimal 1 soal'); return }
+      if (selectedIds.size === 0) { toast.error('Pilih minimal 1 soal'); return }
     } else if (sumber === 'manual' && questions.length === 0) {
       toast.error('Tambah minimal 1 soal'); return
     } else if (sumber === 'google_form' && !formUrl.trim()) {
@@ -114,7 +94,7 @@ export default function BuatUjianPage() {
         teacher_id: user.id, judul: info.judul,
         mata_pelajaran: info.mata_pelajaran || null,
         durasi_menit: info.durasi_menit,
-        sumber: sumber === 'bank_soal' ? 'manual' : (sumber === 'google_form' ? 'google_form' : 'manual'),
+        sumber: sumber === 'google_form' ? 'google_form' : 'manual',
         form_url: formUrl || null,
         bobot_pilgan: info.bobot_pilgan, bobot_essay: info.bobot_essay,
       }).select().single()
@@ -127,16 +107,20 @@ export default function BuatUjianPage() {
         )
       }
 
-      for (const cls of classes) {
-        await supabase.from('classes').insert({ exam_id: exam.id, ...cls })
-      }
+      // Auto-buat 1 kelas dengan token yang sudah di-generate
+      await supabase.from('classes').insert({
+        exam_id: exam.id,
+        nama_kelas: info.judul,
+        token,
+        aktif: false,
+        siswa_list: null,
+      })
 
       toast.success('Ujian berhasil dibuat!')
       router.push(`/guru/ujian/${exam.id}`)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : (typeof err === 'object' && err !== null && 'message' in err ? String((err as {message: unknown}).message) : 'Gagal membuat ujian')
+      const msg = err instanceof Error ? err.message : (typeof err === 'object' && err !== null && 'message' in err ? String((err as { message: unknown }).message) : 'Gagal membuat ujian')
       toast.error(msg)
-      console.error('handleFinish error:', err)
     } finally { setSaving(false) }
   }
 
@@ -285,7 +269,6 @@ export default function BuatUjianPage() {
                 if (!formUrl.trim()) return
                 setImporting(true)
                 try {
-                  // Selalu resolve lewat API: handles forms.gle redirect + normalisasi URL
                   const res = await fetch('/api/import-form', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -310,17 +293,29 @@ export default function BuatUjianPage() {
         </Card>
       )}
 
-      {/* Step 4 */}
+      {/* Step 4: Token */}
       {step === 4 && (
         <Card>
-          <h2 className="font-semibold text-gray-900 mb-4">Kelas & Token</h2>
-          <KelasManager
-            classes={classes.map((c, i) => ({ ...c, id: String(i), exam_id: '', created_at: '' }))}
-            onAddClass={async (nama, siswaList, token) => {
-              setClasses(prev => [...prev, { nama_kelas: nama, token, aktif: false, siswa_list: siswaList }])
-            }}
-          />
-          <div className="flex justify-between mt-6">
+          <h2 className="font-semibold text-gray-900 mb-1">Token Ujian</h2>
+          <p className="text-sm text-gray-500 mb-5">
+            Bagikan token ini ke siswa. Siswa cukup masukkan token dan nama mereka untuk memulai ujian.
+          </p>
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="flex items-center justify-center gap-3 rounded-2xl bg-indigo-50 border-2 border-indigo-200 px-8 py-5">
+              <span className="font-mono text-4xl font-bold tracking-widest text-indigo-700 select-all">{token}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToken(generateToken())}
+              className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline"
+            >
+              Generate ulang token
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 text-center mb-6">
+            Token bisa diaktifkan/dinonaktifkan kapan saja dari halaman detail ujian.
+          </p>
+          <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep(3)}>&larr; Kembali</Button>
             <Button onClick={handleFinish} loading={saving}>Buat Ujian</Button>
           </div>

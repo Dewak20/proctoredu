@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Question, StudentSession, Exam, ViolationType } from '@/types'
 import { useUjianStore } from '@/store/ujianStore'
@@ -28,6 +28,9 @@ export default function UjianPage() {
   const [violationWarning, setViolationWarning] = useState<{
     open: boolean; jenis: ViolationType | null; count: number
   }>({ open: false, jenis: null, count: 0 })
+  const [graceSecondsLeft, setGraceSecondsLeft] = useState<number | null>(null)
+  const graceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const examRef = useRef<typeof exam>(null)
 
   const {
     answers,
@@ -37,6 +40,8 @@ export default function UjianPage() {
     setSession: storeSetSession,
     setQuestions: storeSetQuestions,
   } = useUjianStore()
+
+  useEffect(() => { examRef.current = exam }, [exam])
 
   const handleViolation = useCallback((jenis: ViolationType) => {
     setViolationWarning(prev => ({ open: true, jenis, count: prev.count + 1 }))
@@ -89,10 +94,18 @@ export default function UjianPage() {
     if (submitting) return
     setSubmitting(true)
     try {
+      // Pastikan jawaban terbaru ter-flush ke draft sebelum submit
+      const latestAnswers = useUjianStore.getState().answers
+      await fetch('/api/siswa/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, answers: latestAnswers }),
+      }).catch(() => {}) // abaikan error flush, server masih punya draft lama
+
       const res = await fetch('/api/siswa/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, answers, is_timeout: isTimeout }),
+        body: JSON.stringify({ session_id: sessionId, answers: latestAnswers, is_timeout: isTimeout }),
       })
       if (!res.ok) throw new Error()
       useUjianStore.getState().reset()
@@ -101,9 +114,34 @@ export default function UjianPage() {
       toast.error('Gagal submit, coba lagi')
       setSubmitting(false)
     }
-  }, [sessionId, answers, submitting, router])
+  }, [sessionId, submitting, router])
 
-  const handleTimeout = useCallback(() => handleSubmit(true), [handleSubmit])
+  const GRACE_SECONDS = 60
+
+  const handleTimeout = useCallback(() => {
+    if (examRef.current?.sumber === 'google_form') {
+      // Mode Google Form: beri grace period agar siswa sempat submit di iframe
+      setGraceSecondsLeft(GRACE_SECONDS)
+      graceTimerRef.current = setInterval(() => {
+        setGraceSecondsLeft(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(graceTimerRef.current!)
+            graceTimerRef.current = null
+            handleSubmit(true)
+            return null
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } else {
+      handleSubmit(true)
+    }
+  }, [handleSubmit])
+
+  // Bersihkan grace timer jika komponen unmount
+  useEffect(() => () => {
+    if (graceTimerRef.current) clearInterval(graceTimerRef.current)
+  }, [])
 
   if (loading) {
     return (
@@ -128,7 +166,7 @@ export default function UjianPage() {
               <p className="text-sm font-medium text-gray-900 truncate leading-tight">{exam.judul}</p>
               <p className="text-xs text-gray-400 truncate">{sessionData?.nama_siswa}</p>
             </div>
-            {sessionData?.mulai_at && (
+            {sessionData?.mulai_at && graceSecondsLeft === null && (
               <TimerCountdown
                 durasiMenit={exam.durasi_menit}
                 mulaiAt={sessionData.mulai_at}
@@ -136,13 +174,22 @@ export default function UjianPage() {
               />
             )}
             <Button size="sm" onClick={() => {
-              if (confirm('Pastikan kamu sudah submit di Google Form. Selesaikan ujian?')) {
+              if (graceSecondsLeft !== null || confirm('Pastikan kamu sudah submit di Google Form. Selesaikan ujian?')) {
+                if (graceTimerRef.current) { clearInterval(graceTimerRef.current); graceTimerRef.current = null }
+                setGraceSecondsLeft(null)
                 handleSubmit()
               }
             }} loading={submitting}>
               Selesai
             </Button>
           </div>
+          {/* Banner grace period setelah waktu habis */}
+          {graceSecondsLeft !== null && (
+            <div className="bg-red-600 text-white px-3 py-2 text-sm font-medium text-center animate-pulse">
+              Waktu habis! Segera klik <strong>Submit</strong> di Google Form, lalu tekan Selesai.
+              Halaman otomatis ditutup dalam <strong>{graceSecondsLeft}</strong> detik.
+            </div>
+          )}
         </header>
 
         {/* Google Form iframe */}

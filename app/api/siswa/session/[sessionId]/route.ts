@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { autoTimeoutIfExpired } from '@/lib/session-timeout'
 
 export async function GET(_req: NextRequest, { params }: { params: { sessionId: string } }) {
   const supabase = createServiceClient()
+
+  // Cek server-side: jika waktu sudah habis tapi sesi masih aktif (HP macet / sinyal putus),
+  // langsung tandai timeout. Ini mencegah siswa mendapat waktu ekstra saat reload.
+  await autoTimeoutIfExpired(supabase, params.sessionId)
+
   const { data: session } = await supabase
     .from('student_sessions')
     .select('*, classes(*, exams(*))')

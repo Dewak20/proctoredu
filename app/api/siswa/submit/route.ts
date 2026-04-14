@@ -25,10 +25,22 @@ export async function POST(request: NextRequest) {
 
   const questions = (eqs || []).map((eq: any) => eq.question_bank)
 
+  // Fetch draft answers sebagai fallback jika answers dari request tidak lengkap
+  const { data: drafts } = await supabase
+    .from('answer_drafts')
+    .select('question_id, jawaban_draft')
+    .eq('session_id', session_id)
+
+  const draftMap: Record<string, string> = {}
+  for (const d of drafts || []) {
+    if (d.jawaban_draft) draftMap[d.question_id] = d.jawaban_draft
+  }
+
   // Grade & insert answers
   let skor_pilgan = 0, skor_isian = 0
   const answerRows = questions.map((q: any) => {
-    const jawaban = answers?.[q.id] || null
+    // Prioritaskan jawaban dari request (paling terbaru), fallback ke draft
+    const jawaban = answers?.[q.id] ?? draftMap[q.id] ?? null
     let benar: boolean | null = null
     if (q.tipe === 'pilgan') { benar = gradeAnswer(jawaban, q.kunci_jawaban, 'pilgan'); if (benar) skor_pilgan++ }
     if (q.tipe === 'isian') { benar = gradeAnswer(jawaban, q.kunci_jawaban, 'isian'); if (benar) skor_isian++ }

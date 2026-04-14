@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import SoalForm, { SoalFormData } from '@/components/guru/SoalForm'
 import { Question } from '@/types'
+
 import { generateToken } from '@/lib/token'
 
 type Step = 1 | 2 | 3 | 4
@@ -18,8 +19,6 @@ interface ExamInfo {
   judul: string
   mata_pelajaran: string
   durasi_menit: number
-  bobot_pilgan: number
-  bobot_essay: number
 }
 
 const STEP_LABELS = ['Info Ujian', 'Sumber Soal', 'Tambah Soal', 'Token']
@@ -28,7 +27,7 @@ export default function BuatUjianPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
   const [info, setInfo] = useState<ExamInfo>({
-    judul: '', mata_pelajaran: '', durasi_menit: 60, bobot_pilgan: 70, bobot_essay: 30,
+    judul: '', mata_pelajaran: '', durasi_menit: 60,
   })
   const [sumber, setSumber] = useState<Sumber>('manual')
   const [questions, setQuestions] = useState<Question[]>([])
@@ -96,7 +95,7 @@ export default function BuatUjianPage() {
         durasi_menit: info.durasi_menit,
         sumber: sumber === 'google_form' ? 'google_form' : 'manual',
         form_url: formUrl || null,
-        bobot_pilgan: info.bobot_pilgan, bobot_essay: info.bobot_essay,
+        bobot_pilgan: 70, bobot_essay: 30,
       }).select().single()
       if (examErr) throw examErr
 
@@ -147,10 +146,6 @@ export default function BuatUjianPage() {
             <Input label="Judul Ujian" value={info.judul} onChange={e => setInfo({ ...info, judul: e.target.value })} placeholder="UTS Matematika Semester 1" required />
             <Input label="Mata Pelajaran" value={info.mata_pelajaran} onChange={e => setInfo({ ...info, mata_pelajaran: e.target.value })} placeholder="Matematika" />
             <Input label="Durasi (menit)" type="number" value={info.durasi_menit} onChange={e => setInfo({ ...info, durasi_menit: parseInt(e.target.value) || 60 })} min={5} max={300} />
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="Bobot Pilgan+Isian (%)" type="number" value={info.bobot_pilgan} onChange={e => setInfo({ ...info, bobot_pilgan: parseInt(e.target.value) || 70 })} min={0} max={100} />
-              <Input label="Bobot Essay (%)" type="number" value={info.bobot_essay} onChange={e => setInfo({ ...info, bobot_essay: parseInt(e.target.value) || 30 })} min={0} max={100} />
-            </div>
             <div className="flex justify-end"><Button type="submit">Lanjut &rarr;</Button></div>
           </form>
         </Card>

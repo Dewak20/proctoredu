@@ -45,6 +45,25 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   return NextResponse.json({ sessions: result })
 }
 
+// Hapus sesi siswa (cascade ke answers, violations)
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id } = params
+  const { session_id } = await req.json()
+
+  const auth = createClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const service = createServiceClient()
+
+  const { data: exam } = await service.from('exams').select('teacher_id').eq('id', id).single()
+  if (!exam || exam.teacher_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  await service.from('student_sessions').delete().eq('id', session_id)
+
+  return NextResponse.json({ ok: true })
+}
+
 // Reset sesi siswa
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = params
